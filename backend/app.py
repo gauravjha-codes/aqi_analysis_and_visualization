@@ -1,13 +1,28 @@
 import subprocess
 import json
 import os
+import sys
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
-# Resolve paths
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+# Resolve paths robustly across local and Vercel environments
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.abspath(os.path.join(CURRENT_DIR, '..'))
+CWD_DIR = os.getcwd()
+
+# Detect frontend directory
+candidate_frontend_paths = [
+    os.path.join(BASE_DIR, 'frontend'),
+    os.path.join(CWD_DIR, 'frontend'),
+    os.path.join(CURRENT_DIR, 'frontend'),
+    '/var/task/frontend',
+]
+
 FRONTEND_DIR = os.path.join(BASE_DIR, 'frontend')
-BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+for path in candidate_frontend_paths:
+    if os.path.exists(os.path.join(path, 'index.html')):
+        FRONTEND_DIR = os.path.abspath(path)
+        break
 
 app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path='')
 CORS(app)
@@ -22,7 +37,6 @@ def calculate_sub_index(conc, breakpoints, aqi_ranges):
         i_low, i_high = aqi_ranges[i], aqi_ranges[i + 1]
         if conc <= b_high:
             return i_low + ((i_high - i_low) / (b_high - b_low)) * (conc - b_low)
-    # Beyond highest breakpoint, extrapolate linearly
     b_low, b_high = breakpoints[-2], breakpoints[-1]
     i_low, i_high = aqi_ranges[-2], aqi_ranges[-1]
     return i_low + ((i_high - i_low) / (b_high - b_low)) * (conc - b_low)
@@ -33,7 +47,6 @@ def python_predict_aqi(pm25, pm10, co, no):
     High-accuracy ML / CPCB AQI predictor in Python.
     Used when R runtime is not available (e.g., Vercel Serverless environment).
     """
-    # Breakpoints based on Indian National Air Quality Index (CPCB standards)
     pm25_bp = [0, 30, 60, 90, 120, 250, 380]
     pm10_bp = [0, 50, 100, 250, 350, 430, 510]
     co_bp = [0, 1.0, 2.0, 10.0, 17.0, 34.0, 50.0]
@@ -45,7 +58,6 @@ def python_predict_aqi(pm25, pm10, co, no):
     sub_co = calculate_sub_index(co, co_bp, aqi_ranges)
     sub_no = calculate_sub_index(no, no_bp, aqi_ranges)
 
-    # Sub-indices
     sub_indices = {
         "PM2.5": sub_pm25,
         "PM10": sub_pm10,
@@ -53,13 +65,10 @@ def python_predict_aqi(pm25, pm10, co, no):
         "NO": sub_no
     }
 
-    # Model prediction (Random Forest surrogate calculation)
-    # The primary driver in Indian AQI is max sub-index with weighted interaction
     max_sub = max(sub_indices.values())
     avg_sub = sum(sub_indices.values()) / 4.0
     predicted_aqi = round(max_sub * 0.75 + avg_sub * 0.25, 1)
 
-    # Feature Importance based on model variance and relative influence
     total_sub = sum(sub_indices.values()) or 1.0
     feat_imp = {
         "PM2.5": round((sub_pm25 / total_sub) * 100 + 40, 1),
@@ -91,10 +100,10 @@ def get_aqi_category(aqi):
 
 
 @app.route('/')
-def serve_index():
-    if os.path.exists(os.path.join(app.static_folder, 'index.html')):
-        return send_from_directory(app.static_folder, 'index.html')
-    return jsonify({"status": "AQI Backend API is running", "endpoints": ["/predict", "/api/predict"]})
+def index():
+    if os.path.exists(os.path.join(FRONTEND_DIR, 'index.html')):
+        return send_from_directory(FRONTEND_DIR, 'index.html')
+    return jsonify({"status": "AQI Backend API is running", "endpoints": ["/predict"]})
 
 
 @app.route('/predict', methods=['POST', 'GET'])
@@ -113,7 +122,7 @@ def predict():
         output = None
 
         # Attempt 1: Call R script if Rscript is available
-        script_path = os.path.join(BACKEND_DIR, 'predict.R')
+        script_path = os.path.join(CURRENT_DIR, 'predict.R')
         rds_path = os.path.join(BASE_DIR, 'aqi_model_4features.rds')
 
         if os.path.exists(script_path) and os.path.exists(rds_path):
@@ -122,7 +131,7 @@ def predict():
                     ['Rscript', script_path, str(pm25), str(pm10), str(co), str(no)],
                     capture_output=True,
                     text=True,
-                    cwd=BACKEND_DIR,
+                    cwd=CURRENT_DIR,
                     timeout=10
                 )
                 if result.returncode == 0:
@@ -145,6 +154,15 @@ def predict():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/<path:path>')
+def serve_static(path):
+    if os.path.exists(os.path.join(FRONTEND_DIR, path)):
+        return send_from_directory(FRONTEND_DIR, path)
+    if os.path.exists(os.path.join(FRONTEND_DIR, 'index.html')):
+        return send_from_directory(FRONTEND_DIR, 'index.html')
+    return "Not Found", 404
 
 
 if __name__ == '__main__':
