@@ -1,0 +1,65 @@
+/* Custom styles augmenting Tailwind CSS */
+
+/* Custom Scrollbar for dark theme */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0B1120;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #1E293B;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+}
+
+/* Glassmorphism utilities */
+.bg-glass {
+    background: rgba(30, 41, 59, 0.4);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+/* Animations */
+@keyframes pulse-soft {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.animate-pulse-soft {
+    animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.card-enter {
+    animation: fade-in 0.5s ease-out forwards;
+}
+
+/* AQI gauge specific styling */
+#aqi-gauge {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* AQI category colors - injected dynamically but classes available if needed */
+.aqi-good { @apply bg-green-900 text-green-300 border-green-700; }
+.aqi-satisfactory { @apply bg-yellow-900 text-yellow-300 border-yellow-700; }
+.aqi-moderate { @apply bg-orange-900 text-orange-300 border-orange-700; }
+.aqi-poor { @apply bg-red-900 text-red-300 border-red-700; }
+.aqi-very-poor { @apply bg-purple-900 text-purple-300 border-purple-700; }
+.aqi-severe { @apply bg-rose-950 text-rose-300 border-rose-800; }

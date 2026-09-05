@@ -1,0 +1,24 @@
+# Data and Model files
+*.csv
+
+
+# Jupyter Notebooks and Checkpoints
+*.ipynb
+.ipynb_checkpoints/
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv
+env/
+venv/
+ENV/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

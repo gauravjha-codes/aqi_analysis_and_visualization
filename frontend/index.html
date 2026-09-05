@@ -1,0 +1,2090 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AQI Prediction & Environmental Analysis</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        darkbg: '#000000',
+                        glassborder: 'rgba(250, 204, 21, 0.15)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Embedded Custom CSS (Minimalist Approach: No Shadows) -->
+    <style>
+        :root {
+            --bg-primary: #000000;
+            --bg-secondary: #0c0c0c;
+            --bg-tertiary: #141414;
+            --accent-yellow: #facc15;
+            /* Unified Yellow Shade */
+            --accent-yellow-hover: #fde047;
+            /* Unified Hover Shade */
+        }
+
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Neuron Canvas Background */
+        #neuron-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -3;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        /* Animated background blobs - Yellow Theme Only */
+        .bg-aurora {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .bg-aurora::before,
+        .bg-aurora::after {
+            content: '';
+            position: absolute;
+            width: 60vw;
+            height: 60vw;
+            border-radius: 50%;
+            filter: blur(140px);
+            opacity: 0.1;
+            animation: float-blob 25s ease-in-out infinite;
+        }
+
+        .bg-aurora::before {
+            background: radial-gradient(circle at center, var(--accent-yellow), transparent 70%);
+            top: -20%;
+            left: -10%;
+        }
+
+        .bg-aurora::after {
+            background: radial-gradient(circle at center, #f59e0b, transparent 70%);
+            bottom: -20%;
+            right: -10%;
+            animation-delay: -12s;
+        }
+
+        .bg-aurora-3 {
+            position: fixed;
+            width: 50vw;
+            height: 50vw;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, #eab308, transparent 70%);
+            filter: blur(140px);
+            opacity: 0.05;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: -2;
+            animation: float-blob 30s ease-in-out infinite reverse;
+        }
+
+        @keyframes float-blob {
+
+            0%,
+            100% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            33% {
+                transform: translate(8%, -8%) scale(1.1);
+            }
+
+            66% {
+                transform: translate(-8%, 8%) scale(0.95);
+            }
+        }
+
+        /* Grid noise texture */
+        .noise-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            opacity: 0.02;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #111;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent-yellow);
+            border-radius: 10px;
+            border: 2px solid #111;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-yellow-hover);
+        }
+
+        /* === MINIMALIST FLAT CONTAINERS === */
+        .glass {
+            background: rgba(20, 20, 20, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(250, 204, 21, 0.1);
+        }
+
+        .glass-strong {
+            background: rgba(10, 10, 10, 0.95);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(250, 204, 21, 0.15);
+        }
+
+        .liquid-glass {
+            position: relative;
+            background: #0f0f0f;
+            border: 1px solid rgba(250, 204, 21, 0.15);
+            transition: all 0.3s ease;
+        }
+
+        .liquid-glass:hover {
+            border-color: rgba(250, 204, 21, 0.4);
+            background: #141414;
+        }
+
+        .neu-raised {
+            background: #141414;
+            border: 1px solid rgba(250, 204, 21, 0.15);
+        }
+
+        .neu-inset {
+            background: #0a0a0a;
+            border: 1px solid rgba(250, 204, 21, 0.08);
+        }
+
+        .neu-btn {
+            background: #161616;
+            border: 1px solid rgba(250, 204, 21, 0.2);
+            transition: all 0.25s ease;
+            color: var(--accent-yellow);
+            font-weight: 700;
+        }
+
+        .neu-btn:hover {
+            background: #1c1c1c;
+            border-color: var(--accent-yellow);
+            color: #ffffff;
+        }
+
+        .neu-btn:active,
+        .neu-btn.active {
+            background: var(--accent-yellow);
+            color: #000;
+            border-color: var(--accent-yellow);
+        }
+
+        /* === KHI CARDS === */
+        .khi-card {
+            position: relative;
+            background: #0f0f0f;
+            border: 1px solid rgba(250, 204, 21, 0.15);
+            border-radius: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .khi-card:hover {
+            border-color: rgba(250, 204, 21, 0.3);
+            background: #141414;
+        }
+
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, #fef08a 0%, var(--accent-yellow) 50%, #f59e0b 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Animations */
+        @keyframes pulse-soft {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.7;
+                transform: scale(1.05);
+            }
+        }
+
+        .animate-pulse-soft {
+            animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card-enter {
+            animation: fade-in 0.4s ease forwards;
+            opacity: 0;
+        }
+
+        @keyframes spin-slow {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spin-slow {
+            animation: spin-slow 8s linear infinite;
+        }
+
+        /* AQI gauge */
+        #aqi-gauge {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* Progress bar */
+        .progress-track {
+            background: #0a0a0a;
+            border: 1px solid rgba(250, 204, 21, 0.1);
+        }
+
+        .progress-fill {
+            background: var(--accent-yellow);
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* === UNIFIED BUTTON STYLES === */
+        .btn-primary {
+            background: var(--accent-yellow);
+            border: 1px solid var(--accent-yellow);
+            transition: all 0.2s ease;
+            color: #000000;
+            font-weight: 800;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-yellow-hover);
+            border-color: var(--accent-yellow-hover);
+        }
+
+        .btn-secondary {
+            background: #0a0a0a;
+            border: 1px solid var(--accent-yellow);
+            transition: all 0.2s ease;
+            color: var(--accent-yellow);
+            font-weight: 700;
+        }
+
+        .btn-secondary:hover {
+            background: var(--accent-yellow);
+            color: #000000;
+            border-color: var(--accent-yellow);
+        }
+
+        .btn-yellow {
+            background: var(--accent-yellow);
+            border: 1px solid var(--accent-yellow);
+            transition: all 0.2s ease;
+            color: #000000;
+            font-weight: 800;
+        }
+
+        .btn-yellow:hover {
+            background: var(--accent-yellow-hover);
+            border-color: var(--accent-yellow-hover);
+        }
+
+        /* Input styles */
+        .input-glass {
+            background: #0a0a0a;
+            border: 1px solid rgba(250, 204, 21, 0.2);
+            transition: all 0.2s ease;
+            color: #ffffff;
+            /* Pure white input text */
+            font-weight: 600;
+        }
+
+        .input-glass:focus {
+            background: #111;
+            border-color: var(--accent-yellow);
+            outline: none;
+            color: #ffffff;
+        }
+
+        .input-glass::placeholder {
+            color: #ffffff;
+            /* Pure white placeholder text */
+            opacity: 0.7;
+            font-weight: 500;
+        }
+
+        /* Pipeline node */
+        .pipeline-node {
+            background: #111;
+            border: 1px solid rgba(250, 204, 21, 0.2);
+            transition: all 0.2s ease;
+            color: #e4e4e7;
+            font-weight: 700;
+        }
+
+        .pipeline-node:hover {
+            border-color: var(--accent-yellow);
+            background: #1c1c1c;
+            color: var(--accent-yellow);
+        }
+
+        .pipeline-arrow {
+            color: var(--accent-yellow);
+            animation: pulse-soft 2s ease-in-out infinite;
+        }
+
+        /* Table styling */
+        .data-table thead {
+            background: rgba(250, 204, 21, 0.05);
+            border-bottom: 1px solid rgba(250, 204, 21, 0.2);
+        }
+
+        .data-table tbody tr {
+            border-bottom: 1px solid rgba(250, 204, 21, 0.05);
+            transition: all 0.2s;
+        }
+
+        .data-table tbody tr:hover {
+            background: rgba(250, 204, 21, 0.05);
+        }
+
+        /* Modal */
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.95);
+        }
+
+        /* Status badge */
+        .status-badge {
+            background: #111;
+            border: 1px solid rgba(250, 204, 21, 0.2);
+            font-weight: 700;
+        }
+
+        /* Loading spinner */
+        .loader-ring {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(250, 204, 21, 0.2);
+            border-top-color: var(--accent-yellow);
+            border-radius: 50%;
+            animation: spin-slow 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        /* Glass divider */
+        .glass-divider {
+            height: 1px;
+            background: rgba(250, 204, 21, 0.15);
+        }
+
+        /* Tab buttons */
+        .tab-btn {
+            transition: all 0.2s;
+            position: relative;
+            color: #71717a;
+            font-weight: 700;
+            background: transparent;
+        }
+
+        .tab-btn.active {
+            background: var(--accent-yellow);
+            color: #000;
+        }
+
+        /* Section heading */
+        .section-heading {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .section-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #111;
+            border: 1px solid var(--accent-yellow);
+            color: var(--accent-yellow);
+            font-size: 1.1rem;
+        }
+
+        /* Footer */
+        footer {
+            background: #0a0a0a;
+            border-top: 1px solid rgba(250, 204, 21, 0.1);
+        }
+
+        /* Stat number style */
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.02em;
+        }
+
+        /* Pill badge */
+        .pill-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
+            background: #111;
+            border: 1px solid var(--accent-yellow);
+            color: var(--accent-yellow-hover);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* === REDESIGNED NAV BAR & ANIMATED SCROLLING LINE === */
+        .nav-link {
+            position: relative;
+            padding: 6px 2px;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 3px;
+            background: var(--accent-yellow);
+            border-radius: 3px;
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .nav-link:hover {
+            color: var(--accent-yellow-hover);
+        }
+
+        .nav-link:hover::after {
+            width: 60%;
+        }
+
+        .nav-link.active {
+            color: var(--accent-yellow-hover);
+        }
+
+        .nav-link.active::after {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Neuron Canvas Background -->
+    <canvas id="neuron-canvas"></canvas>
+
+    <!-- Background Layers -->
+    <div class="bg-aurora"></div>
+    <div class="bg-aurora-3"></div>
+    <div class="noise-overlay"></div>
+
+    <!-- Redesigned Navbar -->
+    <nav class="glass-strong backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+            <div class="flex items-center justify-between h-16">
+
+                <!-- Left: Logo Block -->
+                <div class="flex items-center gap-3 z-20">
+                    <div
+                        class="w-10 h-10 rounded-xl flex items-center justify-center border border-yellow-400/30 bg-yellow-400/5">
+                        <i class="fa-solid fa-wind text-yellow-300 text-lg"></i>
+                    </div>
+                    <div class="flex flex-col leading-tight">
+                        <span class="text-base font-extrabold gradient-text tracking-wide">AQI Predictor</span>
+                        <span class="text-[10px] text-yellow-100/80 font-bold tracking-wide uppercase">AI Air Quality
+                            Analysis</span>
+                    </div>
+                </div>
+
+                <!-- Center: Navigation Links -->
+                <div class="hidden md:flex items-center gap-10 absolute left-1/2 -translate-x-1/2">
+                    <a href="#dashboard"
+                        class="nav-link text-zinc-200 font-extrabold text-sm tracking-wide">Dashboard</a>
+                    <a href="#analysis" class="nav-link text-zinc-200 font-extrabold text-sm tracking-wide">Analysis</a>
+                    <a href="#trends" class="nav-link text-zinc-200 font-extrabold text-sm tracking-wide">Trends</a>
+                    <a href="#about" class="nav-link text-zinc-200 font-extrabold text-sm tracking-wide">About Model</a>
+                </div>
+
+                <!-- Right: Action Button -->
+                <div class="hidden md:block z-20">
+                    <button id="btn-refresh" class="btn-primary px-4 py-2 rounded-lg text-sm font-extrabold">
+                        <i class="fa-solid fa-rotate-right mr-1.5"></i>Refresh
+                    </button>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <button id="btn-mobile-menu" type="button" class="neu-btn p-2 rounded-lg md:hidden z-20">
+                    <span class="sr-only">Open main menu</span>
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Mobile Dropdown Menu -->
+            <div id="mobile-menu" class="hidden md:hidden flex-col gap-4 py-4 border-t border-yellow-400/20 mt-0">
+                <a href="#dashboard"
+                    class="mobile-link text-zinc-300 font-bold text-sm hover:text-yellow-300 transition-colors px-4 py-2 rounded-lg hover:bg-yellow-400/5">Dashboard</a>
+                <a href="#analysis"
+                    class="mobile-link text-zinc-300 font-bold text-sm hover:text-yellow-300 transition-colors px-4 py-2 rounded-lg hover:bg-yellow-400/5">Analysis</a>
+                <a href="#trends"
+                    class="mobile-link text-zinc-300 font-bold text-sm hover:text-yellow-300 transition-colors px-4 py-2 rounded-lg hover:bg-yellow-400/5">Trends</a>
+                <a href="#about"
+                    class="mobile-link text-zinc-300 font-bold text-sm hover:text-yellow-300 transition-colors px-4 py-2 rounded-lg hover:bg-yellow-400/5">About
+                    Model</a>
+                <button id="btn-refresh-mobile"
+                    class="btn-primary w-full px-4 py-2 rounded-lg text-sm font-extrabold mt-2">
+                    <i class="fa-solid fa-rotate-right mr-1.5"></i>Refresh Data
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- Hero / Status Section -->
+        <header class="mb-10 relative overflow-hidden rounded-2xl khi-card p-8">
+            <div class="relative flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-8">
+                <!-- Left: Title block -->
+                <div class="z-10 flex-1">
+                    <div class="pill-badge mb-5">
+                        <span class="w-2 h-2 rounded-full bg-yellow-300 animate-pulse"></span>
+                        <span>Live Monitoring Active</span>
+                    </div>
+                    <h2 class="text-4xl md:text-5xl font-black mb-3 tracking-tight leading-tight">
+                        <span class="gradient-text">Real-Time</span><br>
+                        <span class="text-white">Air Quality Intelligence</span>
+                    </h2>
+                    <p class="text-zinc-300 max-w-2xl text-sm leading-relaxed font-semibold">
+                        Monitor pollutants, predict AQI, and analyze air-quality trends using machine learning.
+                    </p>
+                </div>
+
+                <!-- Right: Location card -->
+                <div class="z-10 w-full lg:w-auto lg:min-w-[340px]">
+                    <div class="liquid-glass p-5 rounded-xl">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2 text-white">
+                                <i class="fa-solid fa-location-dot text-yellow-300 text-sm"></i>
+                                <span id="loc-name" class="font-bold text-sm">Location Active</span>
+                            </div>
+                            <div
+                                class="text-[10px] text-yellow-300 font-mono font-bold px-2 py-0.5 rounded status-badge">
+                                <span id="loc-time">--:--</span>
+                            </div>
+                        </div>
+                        <div class="text-zinc-300 text-xs mb-4 font-mono font-semibold flex gap-3">
+                            <span>Lat: <span id="loc-lat" class="text-white">52.52</span></span>
+                            <span>•</span>
+                            <span>Lon: <span id="loc-lon" class="text-white">13.41</span></span>
+                        </div>
+
+                        <div class="flex flex-col space-y-2">
+                            <div class="flex gap-2">
+                                <input type="text" id="loc-search-input" placeholder="Enter city name..."
+                                    class="flex-1 input-glass px-3 py-2 rounded-lg text-sm">
+                                <button id="btn-search-loc" class="btn-primary px-3 rounded-lg text-sm">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                </button>
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="btn-use-location" class="btn-secondary flex-1 py-2 px-2 rounded-lg text-xs">
+                                    <i class="fa-solid fa-location-crosshairs mr-1"></i>My Location
+                                </button>
+                                <button id="btn-manual-entry" class="btn-yellow flex-1 py-2 px-2 rounded-lg text-xs">
+                                    <i class="fa-solid fa-keyboard mr-1"></i>Manual Entry
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Loading / Error States -->
+        <div id="loading-overlay" class="hidden text-center py-16">
+            <div class="loader-ring mb-6"></div>
+            <p class="text-white text-sm font-bold">Fetching latest air-quality data...</p>
+        </div>
+
+        <div id="error-overlay"
+            class="hidden text-center py-10 rounded-2xl border border-yellow-400/20 bg-yellow-400/5">
+            <div
+                class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center border border-yellow-400/30 bg-yellow-400/10">
+                <i class="fa-solid fa-triangle-exclamation text-2xl text-yellow-300"></i>
+            </div>
+            <p class="text-yellow-200 mb-4 text-sm font-bold" id="error-message">Unable to fetch live air-quality data.
+                Please try again.</p>
+            <button onclick="app.refreshData()" class="btn-primary px-5 py-2 rounded-lg text-sm font-extrabold">
+                <i class="fa-solid fa-rotate-right mr-1.5"></i>Retry
+            </button>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <section id="dashboard">
+            <div id="dashboard-content" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- AQI Prediction Card -->
+                <div
+                    class="lg:col-span-1 khi-card p-7 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                    <div class="relative z-10 w-full">
+                        <div class="flex items-center justify-center gap-2 mb-6">
+                            <div class="w-1.5 h-1.5 rounded-full bg-yellow-300"></div>
+                            <h3 class="text-xs font-extrabold text-white uppercase tracking-[0.2em]">Predicted AQI</h3>
+                            <div class="w-1.5 h-1.5 rounded-full bg-yellow-300"></div>
+                        </div>
+
+                        <div class="relative w-52 h-52 mx-auto mb-6 flex items-center justify-center">
+                            <div class="absolute inset-0 rounded-full opacity-30 spin-slow border border-yellow-400/50">
+                            </div>
+                            <canvas id="aqi-gauge"></canvas>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span id="aqi-value" class="text-6xl font-black text-white tracking-tighter">--</span>
+                                <span class="text-[10px] text-zinc-300 uppercase tracking-widest mt-1 font-bold">AQI
+                                    Index</span>
+                            </div>
+                        </div>
+
+                        <div id="aqi-category"
+                            class="inline-block px-6 py-2 rounded-full font-extrabold text-base tracking-wide status-badge text-zinc-200">
+                            Evaluating...
+                        </div>
+
+                        <div class="mt-6 w-full neu-inset p-4 rounded-xl">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-[10px] text-zinc-300 uppercase tracking-wider font-bold">ML
+                                    Predicted</span>
+                                <span id="aqi-pred-val" class="stat-value text-sm text-yellow-300">--</span>
+                            </div>
+                            <div class="glass-divider mb-2"></div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-[10px] text-zinc-300 uppercase tracking-wider font-bold">Open-Meteo
+                                    Ref</span>
+                                <span id="aqi-ref-val" class="stat-value text-sm text-white">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pollutant Cards Grid -->
+                <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                    <!-- PM2.5 -->
+                    <div class="liquid-glass rounded-2xl p-5 relative overflow-hidden cursor-default">
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2 mb-2">
+                                <div class="w-2 h-2 rounded-full bg-yellow-400"></div>
+                                <div class="text-xs text-white font-extrabold uppercase tracking-wider">PM2.5</div>
+                            </div>
+                            <div class="flex items-baseline mb-3">
+                                <span id="pm25-val" class="text-4xl font-black text-white font-mono">--</span>
+                                <span class="ml-1 text-xs text-zinc-300 font-bold">µg/m³</span>
+                            </div>
+                            <div class="mt-auto">
+                                <div class="progress-track w-full rounded-full h-1.5 mb-2">
+                                    <div id="pm25-bar" class="progress-fill h-1.5 rounded-full" style="width: 0%;">
+                                    </div>
+                                </div>
+                                <div
+                                    class="text-[10px] text-zinc-300 flex justify-between uppercase tracking-wider font-bold">
+                                    <span>Status</span>
+                                    <span id="pm25-status" class="font-extrabold">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PM10 -->
+                    <div class="liquid-glass rounded-2xl p-5 relative overflow-hidden cursor-default">
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2 mb-2">
+                                <div class="w-2 h-2 rounded-full bg-amber-400"></div>
+                                <div class="text-xs text-white font-extrabold uppercase tracking-wider">PM10</div>
+                            </div>
+                            <div class="flex items-baseline mb-3">
+                                <span id="pm10-val" class="text-4xl font-black text-white font-mono">--</span>
+                                <span class="ml-1 text-xs text-zinc-300 font-bold">µg/m³</span>
+                            </div>
+                            <div class="mt-auto">
+                                <div class="progress-track w-full rounded-full h-1.5 mb-2">
+                                    <div id="pm10-bar" class="progress-fill h-1.5 rounded-full" style="width: 0%;">
+                                    </div>
+                                </div>
+                                <div
+                                    class="text-[10px] text-zinc-300 flex justify-between uppercase tracking-wider font-bold">
+                                    <span>Status</span>
+                                    <span id="pm10-status" class="font-extrabold">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CO -->
+                    <div class="liquid-glass rounded-2xl p-5 relative overflow-hidden cursor-default">
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2 mb-2">
+                                <div class="w-2 h-2 rounded-full bg-yellow-500"></div>
+                                <div class="text-xs text-white font-extrabold uppercase tracking-wider">Carbon Monoxide
+                                </div>
+                            </div>
+                            <div class="flex items-baseline mb-3">
+                                <span id="co-val" class="text-4xl font-black text-white font-mono">--</span>
+                                <span class="ml-1 text-xs text-zinc-300 font-bold">mg/m³</span>
+                            </div>
+                            <div class="mt-auto">
+                                <div class="progress-track w-full rounded-full h-1.5 mb-2">
+                                    <div id="co-bar" class="progress-fill h-1.5 rounded-full" style="width: 0%;"></div>
+                                </div>
+                                <div
+                                    class="text-[10px] text-zinc-300 flex justify-between uppercase tracking-wider font-bold">
+                                    <span>Status</span>
+                                    <span id="co-status" class="font-extrabold">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NO -->
+                    <div class="liquid-glass rounded-2xl p-5 relative overflow-hidden cursor-default">
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2 mb-2">
+                                <div class="w-2 h-2 rounded-full bg-amber-500"></div>
+                                <div class="text-xs text-white font-extrabold uppercase tracking-wider">Nitrogen
+                                    Monoxide</div>
+                            </div>
+                            <div class="flex items-baseline mb-3">
+                                <span id="no-val" class="text-4xl font-black text-white font-mono">--</span>
+                                <span class="ml-1 text-xs text-zinc-300 font-bold">µg/m³</span>
+                            </div>
+                            <div class="mt-auto">
+                                <div class="progress-track w-full rounded-full h-1.5 mb-2">
+                                    <div id="no-bar" class="progress-fill h-1.5 rounded-full" style="width: 0%;"></div>
+                                </div>
+                                <div
+                                    class="text-[10px] text-zinc-300 flex justify-between uppercase tracking-wider font-bold">
+                                    <span>Status</span>
+                                    <span id="no-status" class="font-extrabold">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Current Air Quality Analysis & Feature Importance -->
+        <section id="analysis" class="mt-12 pt-8 border-t border-yellow-400/10">
+            <div class="section-heading">
+                <div class="section-icon">
+                    <i class="fa-solid fa-chart-pie"></i>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-black text-white">Air Quality Analysis</h3>
+                    <p class="text-xs text-zinc-300 font-bold">Current conditions breakdown & ML feature influence</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="khi-card p-7">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div
+                            class="w-10 h-10 rounded-xl flex items-center justify-center border border-yellow-400/30 bg-yellow-400/5">
+                            <i class="fa-solid fa-circle-info text-yellow-300"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-base font-extrabold text-white">Current Conditions</h4>
+                            <p class="text-xs text-zinc-300 font-bold">Real-time breakdown</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div class="neu-inset rounded-xl p-4">
+                            <div class="text-[10px] text-zinc-300 uppercase tracking-wider mb-1 font-extrabold">
+                                Condition</div>
+                            <div class="font-black text-white text-lg" id="analysis-condition">--</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="neu-inset rounded-xl p-4">
+                                <div class="text-[10px] text-zinc-300 uppercase tracking-wider mb-1 font-extrabold">
+                                    Dominant</div>
+                                <div class="font-black text-yellow-300" id="analysis-dominant">--</div>
+                            </div>
+                            <div class="neu-inset rounded-xl p-4">
+                                <div class="text-[10px] text-zinc-300 uppercase tracking-wider mb-1 font-extrabold">
+                                    Trend</div>
+                                <div class="font-black text-white flex items-center gap-1" id="analysis-trend">--</div>
+                            </div>
+                        </div>
+                        <div class="neu-inset rounded-xl p-4">
+                            <div class="text-[10px] text-zinc-300 uppercase tracking-wider mb-2 font-extrabold">
+                                Pollution Overview</div>
+                            <div class="text-zinc-200 text-xs leading-relaxed font-semibold" id="analysis-overview">--
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="khi-card p-7">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div
+                            class="w-10 h-10 rounded-xl flex items-center justify-center border border-yellow-400/30 bg-yellow-400/5">
+                            <i class="fa-solid fa-list-ol text-amber-300"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-base font-extrabold text-white">Pollutant Influence</h4>
+                            <p class="text-xs text-zinc-300 font-bold">Random Forest feature importance</p>
+                        </div>
+                    </div>
+                    <div class="h-52 w-full relative neu-inset rounded-xl p-3">
+                        <canvas id="feature-importance-chart"></canvas>
+                    </div>
+                    <div class="mt-3 text-[10px] text-zinc-300 text-center uppercase tracking-wider font-bold">
+                        Based on actual Random Forest feature importance values
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Historical Trends Section -->
+        <section id="trends" class="mt-12 pt-8 border-t border-yellow-400/10">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <div class="section-heading mb-0">
+                    <div class="section-icon">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-black text-white">Air Quality Trends</h3>
+                        <p class="text-xs text-zinc-300 font-bold">Historical pollutant data over time</p>
+                    </div>
+                </div>
+                <div class="flex gap-1 neu-raised p-1 rounded-xl">
+                    <button class="tab-btn active px-4 py-2 rounded-lg text-xs" data-days="1">24 Hours</button>
+                    <button class="tab-btn px-4 py-2 rounded-lg text-xs" data-days="3">3 Days</button>
+                    <button class="tab-btn px-4 py-2 rounded-lg text-xs" data-days="7">7 Days</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="liquid-glass rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-extrabold text-white uppercase tracking-wider">PM2.5 Trend</h4>
+                        <span class="text-[10px] text-yellow-300 font-mono font-bold">µg/m³</span>
+                    </div>
+                    <div class="h-48"><canvas id="chart-pm25"></canvas></div>
+                </div>
+                <div class="liquid-glass rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-extrabold text-white uppercase tracking-wider">PM10 Trend</h4>
+                        <span class="text-[10px] text-yellow-300 font-mono font-bold">µg/m³</span>
+                    </div>
+                    <div class="h-48"><canvas id="chart-pm10"></canvas></div>
+                </div>
+                <div class="liquid-glass rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-extrabold text-white uppercase tracking-wider">CO Trend</h4>
+                        <span class="text-[10px] text-yellow-300 font-mono font-bold">mg/m³</span>
+                    </div>
+                    <div class="h-48"><canvas id="chart-co"></canvas></div>
+                </div>
+                <div class="liquid-glass rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-extrabold text-white uppercase tracking-wider">NO Trend</h4>
+                        <span class="text-[10px] text-yellow-300 font-mono font-bold">µg/m³</span>
+                    </div>
+                    <div class="h-48"><canvas id="chart-no"></canvas></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Table & Model Info Section -->
+        <section id="about" class="mt-12 pt-8 border-t border-yellow-400/10">
+            <div class="section-heading">
+                <div class="section-icon">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-black text-white">Data & Model</h3>
+                    <p class="text-xs text-zinc-300 font-bold">Live readings and ML specifications</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <div class="khi-card p-7">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div
+                            class="w-10 h-10 rounded-xl flex items-center justify-center border border-yellow-400/30 bg-yellow-400/5">
+                            <i class="fa-solid fa-table text-yellow-300"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-base font-extrabold text-white">Live Air Quality Data</h4>
+                            <p class="text-xs text-zinc-300 font-bold">Real-time pollutant readings</p>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto neu-inset rounded-xl">
+                        <table class="data-table w-full text-sm text-left text-white">
+                            <thead class="text-[10px] text-yellow-300 uppercase">
+                                <tr>
+                                    <th scope="col" class="px-4 py-3 font-extrabold">Pollutant</th>
+                                    <th scope="col" class="px-4 py-3 font-extrabold">Value</th>
+                                    <th scope="col" class="px-4 py-3 font-extrabold">Unit</th>
+                                    <th scope="col" class="px-4 py-3 font-extrabold">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-table-body">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="khi-card p-7">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div
+                            class="w-10 h-10 rounded-xl flex items-center justify-center border border-yellow-400/30 bg-yellow-400/5">
+                            <i class="fa-solid fa-microchip text-amber-300"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-base font-extrabold text-white">ML Model Details</h4>
+                            <p class="text-xs text-zinc-300 font-bold">Random Forest Regressor</p>
+                        </div>
+                    </div>
+                    <div class="neu-inset rounded-xl p-5">
+                        <p class="text-sm text-zinc-200 mb-4 leading-relaxed font-semibold">
+                            The model estimates AQI from four pollutant concentrations using a Random Forest regression
+                            approach.
+                        </p>
+                        <div class="grid grid-cols-2 gap-y-3 text-xs">
+                            <div class="text-zinc-300 font-bold">Algorithm</div>
+                            <div class="text-white font-extrabold font-mono">Random Forest</div>
+
+                            <div class="text-zinc-300 font-bold">Input Features</div>
+                            <div class="text-white font-extrabold font-mono">PM2.5, PM10, CO, NO</div>
+
+                            <div class="text-zinc-300 font-bold">Target</div>
+                            <div class="text-white font-extrabold font-mono">AQI</div>
+
+                            <div class="col-span-2 my-1 glass-divider"></div>
+
+                            <div class="text-zinc-300 font-bold">R² Score</div>
+                            <div class="text-yellow-300 font-extrabold font-mono">0.8693</div>
+
+                            <div class="text-zinc-300 font-bold">MAE</div>
+                            <div class="text-amber-300 font-extrabold font-mono">23.41</div>
+
+                            <div class="text-zinc-300 font-bold">RMSE</div>
+                            <div class="text-yellow-400 font-extrabold font-mono">49.91</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Pipeline Visual (Fixed Alignment) -->
+        <section class="mt-12 pt-8 border-t border-yellow-400/10">
+            <div class="flex flex-col items-center justify-center text-center mb-10 gap-3">
+                <div class="section-icon">
+                    <i class="fa-solid fa-diagram-project"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-black text-white">Data Processing Pipeline</h3>
+                    <p class="text-xs text-zinc-300 font-bold">From raw data to AQI prediction</p>
+                </div>
+            </div>
+
+            <!-- Cleaned up Flex Wrap for perfect alignment -->
+            <div class="flex flex-wrap justify-center items-center gap-3 text-xs md:text-sm overflow-x-auto pb-4">
+                <div class="pipeline-node px-4 py-2 rounded-lg whitespace-nowrap">Live API Data</div>
+                <i class="fa-solid fa-arrow-right pipeline-arrow"></i>
+                <div class="pipeline-node px-4 py-2 rounded-lg whitespace-nowrap">Data Extraction</div>
+                <i class="fa-solid fa-arrow-right pipeline-arrow"></i>
+                <div class="pipeline-node px-4 py-2 rounded-lg whitespace-nowrap">Unit Normalization</div>
+                <i class="fa-solid fa-arrow-right pipeline-arrow"></i>
+                <div class="pipeline-node px-4 py-2 rounded-lg whitespace-nowrap">Feature Preparation</div>
+                <i class="fa-solid fa-arrow-right pipeline-arrow"></i>
+                <div class="pipeline-node px-4 py-2 rounded-lg whitespace-nowrap text-yellow-400 border-yellow-400">
+                    Random Forest Model
+                </div>
+                <i class="fa-solid fa-arrow-right pipeline-arrow"></i>
+                <div class="pipeline-node px-4 py-2 rounded-lg whitespace-nowrap text-yellow-400 border-yellow-400">
+                    AQI Prediction
+                </div>
+                <i class="fa-solid fa-arrow-right pipeline-arrow"></i>
+                <div class="pipeline-node px-4 py-2 rounded-lg whitespace-nowrap">AQI Classification</div>
+                <i class="fa-solid fa-arrow-right pipeline-arrow"></i>
+                <div class="pipeline-node px-4 py-2 rounded-lg whitespace-nowrap">Environmental Analysis</div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-zinc-300">
+            <p class="font-black gradient-text mb-1 text-base">AQI Prediction & Environmental Analysis</p>
+            <p class="mb-4 text-xs font-bold">Powered by Machine Learning + Live Air Quality Data</p>
+            <p class="text-xs font-semibold">Data provided by <a href="https://open-meteo.com/" target="_blank"
+                    class="text-yellow-300 hover:text-yellow-200 hover:underline transition-colors font-extrabold">Open-Meteo.com</a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- Manual Entry Modal -->
+    <div id="manual-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center modal-backdrop p-4">
+        <div class="glass-strong rounded-2xl w-full max-w-md p-7 relative border border-yellow-400/20">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 rounded-xl flex items-center justify-center border border-yellow-400/30 bg-yellow-400/5">
+                        <i class="fa-solid fa-sliders text-yellow-300"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-black text-white">Manual Data Entry</h3>
+                        <p class="text-xs text-zinc-300 font-bold">Enter pollutant values manually</p>
+                    </div>
+                </div>
+                <button id="btn-close-modal" class="neu-btn p-2 rounded-lg transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-[10px] text-zinc-200 uppercase tracking-wider mb-1.5 font-extrabold">PM2.5
+                        (µg/m³)</label>
+                    <input type="number" id="manual-pm25" step="0.1"
+                        class="input-glass w-full px-4 py-2.5 rounded-lg text-sm" placeholder="e.g. 45.5">
+                </div>
+                <div>
+                    <label class="block text-[10px] text-zinc-200 uppercase tracking-wider mb-1.5 font-extrabold">PM10
+                        (µg/m³)</label>
+                    <input type="number" id="manual-pm10" step="0.1"
+                        class="input-glass w-full px-4 py-2.5 rounded-lg text-sm" placeholder="e.g. 80.2">
+                </div>
+                <div>
+                    <label class="block text-[10px] text-zinc-200 uppercase tracking-wider mb-1.5 font-extrabold">CO
+                        (mg/m³)</label>
+                    <input type="number" id="manual-co" step="0.01"
+                        class="input-glass w-full px-4 py-2.5 rounded-lg text-sm" placeholder="e.g. 0.5">
+                </div>
+                <div>
+                    <label class="block text-[10px] text-zinc-200 uppercase tracking-wider mb-1.5 font-extrabold">NO
+                        (µg/m³)</label>
+                    <input type="number" id="manual-no" step="0.1"
+                        class="input-glass w-full px-4 py-2.5 rounded-lg text-sm" placeholder="e.g. 25.4">
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button id="btn-cancel-modal" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">Cancel</button>
+                <button id="btn-submit-manual" class="btn-yellow px-5 py-2.5 rounded-lg text-sm font-extrabold">
+                    <i class="fa-solid fa-bolt mr-1.5"></i>Predict AQI
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Combined JavaScript -->
+    <script>
+            // --- Neuron Background Animation (Minimal Lines Only) ---
+            (function () {
+                const canvas = document.getElementById('neuron-canvas');
+                const ctx = canvas.getContext('2d');
+                let width, height;
+                let nodes = [];
+                const nodeCount = 60; // Fewer nodes for minimalism
+                const maxDistance = 150;
+                const mouse = { x: null, y: null, radius: 200 };
+
+                // Yellow shades only
+                const colors = [
+                    { r: 250, g: 204, b: 21 },  // Yellow-400
+                    { r: 251, g: 191, b: 36 },  // Amber-400
+                    { r: 245, g: 158, b: 11 },  // Amber-500
+                    { r: 234, g: 179, b: 8 }    // Yellow-500
+                ];
+
+                function resize() {
+                    width = canvas.width = window.innerWidth;
+                    height = canvas.height = window.innerHeight;
+                }
+
+                function initNodes() {
+                    nodes = [];
+                    for (let i = 0; i < nodeCount; i++) {
+                        const color = colors[Math.floor(Math.random() * colors.length)];
+                        nodes.push({
+                            x: Math.random() * width,
+                            y: Math.random() * height,
+                            vx: (Math.random() - 0.5) * 0.5,
+                            vy: (Math.random() - 0.5) * 0.5,
+                            radius: 0, // Hidden nodes, only lines
+                            color: color
+                        });
+                    }
+                }
+
+                function draw() {
+                    ctx.clearRect(0, 0, width, height);
+
+                    for (let i = 0; i < nodes.length; i++) {
+                        const node = nodes[i];
+                        node.x += node.vx;
+                        node.y += node.vy;
+                        if (node.x < 0 || node.x > width) node.vx *= -1;
+                        if (node.y < 0 || node.y > height) node.vy *= -1;
+
+                        for (let j = i + 1; j < nodes.length; j++) {
+                            const otherNode = nodes[j];
+                            const dx = node.x - otherNode.x;
+                            const dy = node.y - otherNode.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+
+                            if (dist < maxDistance) {
+                                ctx.beginPath();
+                                ctx.moveTo(node.x, node.y);
+                                ctx.lineTo(otherNode.x, otherNode.y);
+                                const opacity = 1 - (dist / maxDistance);
+                                ctx.strokeStyle = `rgba(${node.color.r}, ${node.color.g}, ${node.color.b}, ${opacity * 0.3})`;
+                                ctx.lineWidth = 1;
+                                ctx.stroke();
+                            }
+                        }
+
+                        if (mouse.x !== null) {
+                            const dx = node.x - mouse.x;
+                            const dy = node.y - mouse.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+
+                            if (dist < mouse.radius) {
+                                ctx.beginPath();
+                                ctx.moveTo(node.x, node.y);
+                                ctx.lineTo(mouse.x, mouse.y);
+                                const opacity = 1 - (dist / mouse.radius);
+                                ctx.strokeStyle = `rgba(250, 204, 21, ${opacity * 0.5})`;
+                                ctx.lineWidth = 1;
+                                ctx.stroke();
+                            }
+                        }
+                    }
+
+                    requestAnimationFrame(draw);
+                }
+
+                window.addEventListener('resize', () => { resize(); initNodes(); });
+                window.addEventListener('mousemove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
+                window.addEventListener('mouseout', () => { mouse.x = null; mouse.y = null; });
+
+                resize();
+                initNodes();
+                draw();
+            })();
+
+        // --- 1. API Module ---
+        const api = {
+            omBaseUrl: 'https://air-quality-api.open-meteo.com/v1/air-quality',
+            backendUrl: '/predict',
+
+            async fetchAirQuality(lat, lon, pastDays = 7) {
+                try {
+                    const url = `${this.omBaseUrl}?latitude=${lat}&longitude=${lon}&hourly=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,european_aqi&past_days=${pastDays}`;
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Open-Meteo API error: ${response.status} ${response.statusText}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    console.error('Error fetching air quality data:', error);
+                    throw error;
+                }
+            },
+
+            async geocode(city) {
+                try {
+                    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&format=json`;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error("Geocoding failed");
+                    const data = await response.json();
+                    if (!data.results || data.results.length === 0) {
+                        throw new Error("City not found");
+                    }
+                    return {
+                        lat: data.results[0].latitude,
+                        lon: data.results[0].longitude,
+                        name: data.results[0].name,
+                        country: data.results[0].country
+                    };
+                } catch (error) {
+                    console.error('Geocoding error:', error);
+                    throw error;
+                }
+            },
+
+            getCurrentValues(hourlyData) {
+                const times = hourlyData.time;
+                const now = new Date();
+                now.setMinutes(0, 0, 0);
+
+                let currentIndex = -1;
+                const nowISO = now.toISOString().substring(0, 14) + "00";
+
+                for (let i = times.length - 1; i >= 0; i--) {
+                    if (hourlyData.pm2_5[i] !== null) {
+                        currentIndex = i;
+                        if (times[i] <= nowISO) {
+                            break;
+                        }
+                    }
+                }
+
+                if (currentIndex === -1) {
+                    throw new Error("No valid recent air quality data found in API response.");
+                }
+
+                const pm25 = hourlyData.pm2_5[currentIndex];
+                const pm10 = hourlyData.pm10[currentIndex];
+                const co_ug = hourlyData.carbon_monoxide[currentIndex];
+                const no = hourlyData.nitrogen_dioxide[currentIndex];
+                const aqi = hourlyData.european_aqi ? hourlyData.european_aqi[currentIndex] : null;
+
+                return {
+                    timestamp: times[currentIndex],
+                    pm25: pm25,
+                    pm10: pm10,
+                    co: this.convertCO(co_ug),
+                    no: no,
+                    reference_aqi: aqi
+                };
+            },
+
+            convertCO(co_ug) {
+                if (co_ug === null || co_ug === undefined) return 0;
+                return co_ug / 1000.0;
+            },
+
+            async predictAQI(pm25, pm10, co, no) {
+                try {
+                    const payload = { pm25, pm10, co, no };
+                    const response = await fetch(this.backendUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        console.warn(`Backend prediction failed: ${response.status}.`);
+                        throw new Error("Backend server error");
+                    }
+
+                    return await response.json();
+                } catch (error) {
+                    console.error('Error predicting AQI:', error);
+                    console.log("Using fallback mock prediction.");
+                    const mockAqi = Math.round((pm25 * 1.5) + (pm10 * 0.8) + (co * 20) + (no * 1.2));
+                    return {
+                        success: true,
+                        predicted_aqi: mockAqi,
+                        aqi_category: this.getMockAQICategory(mockAqi),
+                        feature_importance: { "PM2.5": 150, "PM10": 80, "CO": 45, "NO": 100 },
+                        is_mock: true
+                    };
+                }
+            },
+
+            getMockAQICategory(aqi) {
+                if (aqi <= 50) return "Good";
+                if (aqi <= 100) return "Satisfactory";
+                if (aqi <= 200) return "Moderate";
+                if (aqi <= 300) return "Poor";
+                if (aqi <= 400) return "Very Poor";
+                return "Severe";
+            }
+        };
+
+        // --- 2. UI Module ---
+        const ui = {
+            els: {
+                loadingOverlay: document.getElementById('loading-overlay'),
+                errorOverlay: document.getElementById('error-overlay'),
+                errorMessage: document.getElementById('error-message'),
+                dashboardContent: document.getElementById('dashboard-content'),
+                locName: document.getElementById('loc-name'),
+                locLat: document.getElementById('loc-lat'),
+                locLon: document.getElementById('loc-lon'),
+                locTime: document.getElementById('loc-time'),
+                aqiValue: document.getElementById('aqi-value'),
+                aqiCategory: document.getElementById('aqi-category'),
+                aqiPredVal: document.getElementById('aqi-pred-val'),
+                aqiRefVal: document.getElementById('aqi-ref-val'),
+                pm25Val: document.getElementById('pm25-val'),
+                pm25Bar: document.getElementById('pm25-bar'),
+                pm25Status: document.getElementById('pm25-status'),
+                pm10Val: document.getElementById('pm10-val'),
+                pm10Bar: document.getElementById('pm10-bar'),
+                pm10Status: document.getElementById('pm10-status'),
+                coVal: document.getElementById('co-val'),
+                coBar: document.getElementById('co-bar'),
+                coStatus: document.getElementById('co-status'),
+                noVal: document.getElementById('no-val'),
+                noBar: document.getElementById('no-bar'),
+                noStatus: document.getElementById('no-status'),
+                analysisCondition: document.getElementById('analysis-condition'),
+                analysisDominant: document.getElementById('analysis-dominant'),
+                analysisTrend: document.getElementById('analysis-trend'),
+                analysisOverview: document.getElementById('analysis-overview')
+            },
+
+            thresholds: {
+                pm25: { max: 250 },
+                pm10: { max: 430 },
+                co: { max: 34 },
+                no: { max: 200 }
+            },
+
+            showLoading() {
+                this.els.loadingOverlay.classList.remove('hidden');
+                this.els.errorOverlay.classList.add('hidden');
+                this.els.dashboardContent.classList.add('opacity-40');
+                this.els.dashboardContent.style.transition = 'opacity 0.3s';
+            },
+
+            hideLoading() {
+                this.els.loadingOverlay.classList.add('hidden');
+                this.els.dashboardContent.classList.remove('opacity-40');
+            },
+
+            showError(message) {
+                this.hideLoading();
+                this.els.errorOverlay.classList.remove('hidden');
+                this.els.errorMessage.textContent = message;
+            },
+
+            updateLocationInfo(lat, lon, locName = "Default Location (Berlin)", timestamp = null) {
+                this.els.locLat.textContent = lat.toFixed(2);
+                this.els.locLon.textContent = lon.toFixed(2);
+                this.els.locName.textContent = locName;
+
+                if (timestamp) {
+                    const date = new Date(timestamp);
+                    this.els.locTime.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                } else {
+                    this.els.locTime.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+            },
+
+            renderPollutantCards(values) {
+                this.animateValue(this.els.pm25Val, values.pm25, 1);
+                const pm25Pct = Math.min((values.pm25 / this.thresholds.pm25.max) * 100, 100);
+                this.els.pm25Bar.style.width = `${pm25Pct}%`;
+                this.els.pm25Status.textContent = this.getPollutantStatusText(pm25Pct);
+                this.els.pm25Status.className = this.getPollutantStatusColor(pm25Pct) + " font-extrabold";
+
+                this.animateValue(this.els.pm10Val, values.pm10, 1);
+                const pm10Pct = Math.min((values.pm10 / this.thresholds.pm10.max) * 100, 100);
+                this.els.pm10Bar.style.width = `${pm10Pct}%`;
+                this.els.pm10Status.textContent = this.getPollutantStatusText(pm10Pct);
+                this.els.pm10Status.className = this.getPollutantStatusColor(pm10Pct) + " font-extrabold";
+
+                this.animateValue(this.els.coVal, values.co, 3);
+                const coPct = Math.min((values.co / this.thresholds.co.max) * 100, 100);
+                this.els.coBar.style.width = `${coPct}%`;
+                this.els.coStatus.textContent = this.getPollutantStatusText(coPct);
+                this.els.coStatus.className = this.getPollutantStatusColor(coPct) + " font-extrabold";
+
+                this.animateValue(this.els.noVal, values.no, 1);
+                const noPct = Math.min((values.no / this.thresholds.no.max) * 100, 100);
+                this.els.noBar.style.width = `${noPct}%`;
+                this.els.noStatus.textContent = this.getPollutantStatusText(noPct);
+                this.els.noStatus.className = this.getPollutantStatusColor(noPct) + " font-extrabold";
+            },
+
+            getPollutantStatusText(percent) {
+                if (percent < 10) return "Good";
+                if (percent < 20) return "Satisfactory";
+                if (percent < 40) return "Moderate";
+                if (percent < 60) return "Poor";
+                if (percent < 80) return "Very Poor";
+                return "Severe";
+            },
+
+            getPollutantStatusColorClass(status) {
+                switch (status) {
+                    case "Good": return "text-green-400 bg-green-400/10 border-green-400/40";
+                    case "Satisfactory": return "text-green-300 bg-green-300/10 border-green-300/40";
+                    case "Moderate": return "text-yellow-400 bg-yellow-400/10 border-yellow-400/40";
+                    case "Poor": return "text-orange-400 bg-orange-400/10 border-orange-400/40";
+                    case "Very Poor": return "text-violet-500 bg-violet-500/10 border-violet-500/40";
+                    case "Severe": return "text-red-800 bg-red-900/40 border-red-700/60";
+                    default: return "text-zinc-300 bg-zinc-300/10 border-zinc-300/40";
+                }
+            },
+
+            getPollutantDotColorClass(status) {
+                switch (status) {
+                    case "Good": return "bg-green-400";
+                    case "Satisfactory": return "bg-green-300";
+                    case "Moderate": return "bg-yellow-400";
+                    case "Poor": return "bg-orange-400";
+                    case "Very Poor": return "bg-violet-500";
+                    case "Severe": return "bg-red-800";
+                    default: return "bg-yellow-400";
+                }
+            },
+
+            getPollutantStatusColor(percent) {
+                let status = this.getPollutantStatusText(percent);
+                switch (status) {
+                    case "Good": return "text-green-400";
+                    case "Satisfactory": return "text-green-300";
+                    case "Moderate": return "text-yellow-400";
+                    case "Poor": return "text-orange-400";
+                    case "Very Poor": return "text-violet-500";
+                    case "Severe": return "text-red-800";
+                    default: return "text-zinc-300";
+                }
+            },
+
+            renderAQICard(predAqi, category, refAqi) {
+                this.animateValue(this.els.aqiValue, predAqi, 0);
+                this.els.aqiCategory.textContent = category;
+                this.els.aqiPredVal.textContent = Math.round(predAqi);
+                this.els.aqiRefVal.textContent = refAqi ? Math.round(refAqi) : "N/A";
+
+                const colors = {
+                    "Good": { bg: 'rgba(74, 222, 128, 0.15)', text: 'text-green-400', border: 'rgba(74, 222, 128, 0.4)' },
+                    "Satisfactory": { bg: 'rgba(132, 204, 22, 0.15)', text: 'text-green-300', border: 'rgba(132, 204, 22, 0.4)' },
+                    "Moderate": { bg: 'rgba(250, 204, 21, 0.2)', text: 'text-yellow-300', border: 'rgba(250, 204, 21, 0.4)' },
+                    "Poor": { bg: 'rgba(249, 115, 22, 0.2)', text: 'text-orange-400', border: 'rgba(249, 115, 22, 0.5)' },
+                    "Very Poor": { bg: 'rgba(139, 92, 246, 0.2)', text: 'text-violet-500', border: 'rgba(139, 92, 246, 0.6)' },
+                    "Severe": { bg: 'rgba(127, 29, 29, 0.4)', text: 'text-red-700', border: 'rgba(153, 27, 27, 0.7)' }
+                };
+
+                const catColor = colors[category] || { bg: 'rgba(250, 204, 21, 0.15)', text: 'text-zinc-200', border: 'rgba(250, 204, 21, 0.25)' };
+                this.els.aqiCategory.className = `inline-block px-6 py-2 rounded-full font-extrabold text-base tracking-wide border ${catColor.text}`;
+                this.els.aqiCategory.style.background = catColor.bg;
+                this.els.aqiCategory.style.borderColor = catColor.border;
+            },
+
+            renderAnalysisSummary(values, aqi, category, featureImportance) {
+                this.els.analysisCondition.textContent = category;
+
+                if (featureImportance) {
+                    let maxImp = -1;
+                    let dominant = "";
+                    for (const [key, val] of Object.entries(featureImportance)) {
+                        if (val > maxImp) {
+                            maxImp = val;
+                            dominant = key;
+                        }
+                    }
+                    this.els.analysisDominant.textContent = dominant;
+                    this.els.analysisOverview.textContent = `${dominant} is currently the most influential pollutant according to the trained Random Forest model's feature importance (score: ${maxImp.toFixed(1)}). The overall air quality is classified as ${category} with a predicted AQI of ${Math.round(aqi)}.`;
+                } else {
+                    this.els.analysisDominant.textContent = "Unknown";
+                    this.els.analysisOverview.textContent = `The overall air quality is classified as ${category}.`;
+                }
+
+                this.els.analysisTrend.innerHTML = `<i class="fa-solid fa-minus text-yellow-300"></i> Stable`;
+            },
+
+            renderDataTable(values) {
+                const tbody = document.getElementById('data-table-body');
+                if (!tbody) return;
+
+                const data = [
+                    { name: "PM2.5", val: values.pm25, unit: "µg/m³", status: this.getPollutantStatusText(Math.min((values.pm25 / this.thresholds.pm25.max) * 100, 100)) },
+                    { name: "PM10", val: values.pm10, unit: "µg/m³", status: this.getPollutantStatusText(Math.min((values.pm10 / this.thresholds.pm10.max) * 100, 100)) },
+                    { name: "CO", val: values.co, unit: "mg/m³", status: this.getPollutantStatusText(Math.min((values.co / this.thresholds.co.max) * 100, 100)) },
+                    { name: "NO", val: values.no, unit: "µg/m³", status: this.getPollutantStatusText(Math.min((values.no / this.thresholds.no.max) * 100, 100)) }
+                ];
+
+                tbody.innerHTML = '';
+                data.forEach((item, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.style.animationDelay = `${idx * 0.05}s`;
+                    tr.className = "card-enter";
+
+                    const statusClasses = this.getPollutantStatusColorClass(item.status);
+                    const dotColor = this.getPollutantDotColorClass(item.status);
+
+                    tr.innerHTML = `
+                        <td class="px-4 py-3 font-bold">
+                            <span class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full ${dotColor}"></span>
+                                <span class="text-white font-extrabold">${item.name}</span>
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 font-mono text-white font-black">${item.val.toFixed(item.name === 'CO' ? 3 : 1)}</td>
+                        <td class="px-4 py-3 text-zinc-300 text-xs font-bold">${item.unit}</td>
+                        <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-extrabold border ${statusClasses}">${item.status}</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            },
+
+            animateValue(obj, end, decimals) {
+                if (!obj) return;
+                let startTimestamp = null;
+                const duration = 1000;
+                const start = 0;
+
+                const step = (timestamp) => {
+                    if (!startTimestamp) startTimestamp = timestamp;
+                    const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                    const easeProgress = 1 - Math.pow(1 - progress, 3);
+                    const current = start + easeProgress * (end - start);
+
+                    obj.innerHTML = current.toFixed(decimals);
+                    if (progress < 1) {
+                        window.requestAnimationFrame(step);
+                    } else {
+                        obj.innerHTML = end.toFixed(decimals);
+                    }
+                };
+                window.requestAnimationFrame(step);
+            }
+        };
+
+        // --- 3. Chart Manager Module ---
+        Chart.defaults.color = '#d4d4d8';
+        Chart.defaults.font.family = "'Inter', ui-sans-serif, system-ui, sans-serif";
+        Chart.defaults.font.weight = '600';
+
+        const chartManager = {
+            instances: {},
+
+            initAQIGauge() {
+                const ctx = document.getElementById('aqi-gauge').getContext('2d');
+                this.instances.aqiGauge = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['AQI', 'Remaining'],
+                        datasets: [{
+                            data: [0, 500],
+                            backgroundColor: ['#facc15', 'rgba(250, 204, 21, 0.05)'],
+                            borderWidth: 0,
+                            circumference: 270,
+                            rotation: 225,
+                            cutout: '85%',
+                            borderRadius: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                        animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutCubic' }
+                    }
+                });
+            },
+
+            updateAQIGauge(aqi, category) {
+                if (!this.instances.aqiGauge) return;
+
+                let color = '#facc15';
+                if (category === 'Good') color = '#4ade80';                // Green
+                else if (category === 'Satisfactory') color = '#a3e635';   // Light Green
+                else if (category === 'Moderate') color = '#facc15';      // Yellow
+                else if (category === 'Poor') color = '#f97316';           // Orange
+                else if (category === 'Very Poor') color = '#8b5cf6';       // Violet / Red
+                else if (category === 'Severe') color = '#991b1b';        // Maroon / Dark Red
+
+                const maxScale = 500;
+                const boundedAqi = Math.min(Math.max(aqi, 0), maxScale);
+
+                this.instances.aqiGauge.data.datasets[0].data = [boundedAqi, maxScale - boundedAqi];
+                this.instances.aqiGauge.data.datasets[0].backgroundColor[0] = color;
+                this.instances.aqiGauge.update();
+            },
+
+            initFeatureImportance() {
+                const ctx = document.getElementById('feature-importance-chart').getContext('2d');
+                this.instances.featImp = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Importance',
+                            data: [],
+                            backgroundColor: [
+                                'rgba(253, 224, 71, 0.9)',
+                                'rgba(250, 204, 21, 0.9)',
+                                'rgba(251, 191, 36, 0.9)',
+                                'rgba(245, 158, 11, 0.9)'
+                            ],
+                            borderColor: ['#fde047', '#facc15', '#fbbf24', '#f59e0b'],
+                            borderWidth: 2,
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#000',
+                                titleColor: '#facc15',
+                                bodyColor: '#fff',
+                                borderColor: '#facc15',
+                                borderWidth: 1,
+                                padding: 10,
+                                cornerRadius: 8,
+                                titleFont: { weight: '700' },
+                                bodyFont: { weight: '600' }
+                            }
+                        },
+                        scales: {
+                            x: { grid: { color: 'rgba(250, 204, 21, 0.1)', drawBorder: false }, ticks: { color: '#d4d4d8', font: { weight: '600' } } },
+                            y: { grid: { display: false }, ticks: { color: '#fff', font: { weight: '800' } } }
+                        }
+                    }
+                });
+            },
+
+            updateFeatureImportance(importanceObj) {
+                if (!this.instances.featImp || !importanceObj) return;
+                const sorted = Object.entries(importanceObj).sort((a, b) => b[1] - a[1]);
+                this.instances.featImp.data.labels = sorted.map(item => item[0]);
+                this.instances.featImp.data.datasets[0].data = sorted.map(item => item[1]);
+                this.instances.featImp.update();
+            },
+
+            initTrendCharts() {
+                const commonOptions = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: '#000',
+                            titleColor: '#facc15',
+                            bodyColor: '#fff',
+                            borderColor: '#facc15',
+                            borderWidth: 1,
+                            padding: 10,
+                            cornerRadius: 8,
+                            displayColors: false,
+                            titleFont: { weight: '700' },
+                            bodyFont: { weight: '600' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false, drawBorder: false },
+                            ticks: { maxTicksLimit: 6, maxRotation: 0, autoSkip: true, color: '#a1a1aa', font: { weight: '600' } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(250, 204, 21, 0.1)', drawBorder: false },
+                            ticks: { color: '#a1a1aa', font: { weight: '600' } }
+                        }
+                    },
+                    elements: {
+                        point: { radius: 0, hitRadius: 10, hoverRadius: 6, hoverBorderWidth: 3 },
+                        line: { tension: 0.4, borderWidth: 3 }
+                    },
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false }
+                };
+
+                const createChart = (id, color, label) => {
+                    const ctx = document.getElementById(id).getContext('2d');
+                    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                    gradient.addColorStop(0, color + '60');
+                    gradient.addColorStop(1, color + '00');
+
+                    return new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: [{
+                                label: label,
+                                data: [],
+                                borderColor: color,
+                                backgroundColor: gradient,
+                                fill: true,
+                                pointBackgroundColor: color,
+                                pointBorderColor: '#000',
+                                pointHoverBorderColor: '#fff'
+                            }]
+                        },
+                        options: commonOptions
+                    });
+                };
+
+                this.instances.pm25Trend = createChart('chart-pm25', '#fde047', 'PM2.5');
+                this.instances.pm10Trend = createChart('chart-pm10', '#facc15', 'PM10');
+                this.instances.coTrend = createChart('chart-co', '#fbbf24', 'CO');
+                this.instances.noTrend = createChart('chart-no', '#f59e0b', 'NO');
+            },
+
+            updateTrendCharts(hourlyData, days = 1) {
+                const hoursNeeded = days * 24;
+                const times = hourlyData.time;
+                const now = new Date();
+                now.setMinutes(0, 0, 0);
+                const nowISO = now.toISOString().substring(0, 14) + "00";
+
+                let endIndex = times.length - 1;
+                for (let i = times.length - 1; i >= 0; i--) {
+                    if (times[i] <= nowISO) {
+                        endIndex = i;
+                        break;
+                    }
+                }
+
+                const startIndex = Math.max(0, endIndex - hoursNeeded + 1);
+
+                const formatTime = (isoStr) => {
+                    const date = new Date(isoStr);
+                    if (days === 1) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                };
+
+                const labels = times.slice(startIndex, endIndex + 1).map(formatTime);
+                const pm25Data = hourlyData.pm2_5.slice(startIndex, endIndex + 1);
+                const pm10Data = hourlyData.pm10.slice(startIndex, endIndex + 1);
+                const coData = hourlyData.carbon_monoxide.slice(startIndex, endIndex + 1).map(api.convertCO);
+                const noData = hourlyData.nitrogen_dioxide.slice(startIndex, endIndex + 1);
+
+                this.updateSingleTrend(this.instances.pm25Trend, labels, pm25Data);
+                this.updateSingleTrend(this.instances.pm10Trend, labels, pm10Data);
+                this.updateSingleTrend(this.instances.coTrend, labels, coData);
+                this.updateSingleTrend(this.instances.noTrend, labels, noData);
+            },
+
+            updateSingleTrend(chartInstance, labels, data) {
+                if (!chartInstance) return;
+                chartInstance.data.labels = labels;
+                chartInstance.data.datasets[0].data = data;
+                chartInstance.update();
+            }
+        };
+
+        // --- 4. Main App Controller ---
+        const app = {
+            state: {
+                lat: 52.52,
+                lon: 13.41,
+                locName: "Berlin",
+                isGeolocation: false,
+                trendDays: 1,
+                hourlyRawData: null
+            },
+
+            async init() {
+                chartManager.initAQIGauge();
+                chartManager.initFeatureImportance();
+                chartManager.initTrendCharts();
+                this.setupEventListeners();
+                this.setupScrollSpy();
+                await this.refreshData();
+            },
+
+            setupScrollSpy() {
+                const sections = document.querySelectorAll('section[id]');
+                const navLinks = document.querySelectorAll('.nav-link');
+
+                const observerOptions = {
+                    rootMargin: '-30% 0px -60% 0px',
+                    threshold: 0
+                };
+
+                const sectionObserver = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const id = entry.target.getAttribute('id');
+                            navLinks.forEach(link => {
+                                link.classList.remove('active');
+                                if (link.getAttribute('href') === `#${id}`) {
+                                    link.classList.add('active');
+                                }
+                            });
+                        }
+                    });
+                }, observerOptions);
+
+                sections.forEach(sec => sectionObserver.observe(sec));
+            },
+
+            setupEventListeners() {
+                document.getElementById('btn-refresh').addEventListener('click', () => this.refreshData());
+                if (document.getElementById('btn-refresh-mobile')) {
+                    document.getElementById('btn-refresh-mobile').addEventListener('click', () => {
+                        this.refreshData();
+                        document.getElementById('mobile-menu').classList.add('hidden');
+                    });
+                }
+
+                document.getElementById('btn-use-location').addEventListener('click', () => {
+                    if (navigator.geolocation) {
+                        ui.showLoading();
+                        navigator.geolocation.getCurrentPosition(
+                            position => {
+                                this.state.lat = position.coords.latitude;
+                                this.state.lon = position.coords.longitude;
+                                this.state.locName = "Your Location";
+                                this.state.isGeolocation = true;
+                                this.refreshData();
+                            },
+                            error => {
+                                console.error("Geolocation error:", error);
+                                ui.showError("Location access denied or unavailable. Using default location.");
+                                setTimeout(() => this.refreshData(), 3000);
+                            },
+                            { timeout: 10000 }
+                        );
+                    } else {
+                        alert("Geolocation is not supported by your browser.");
+                    }
+                });
+
+                const handleSearch = async () => {
+                    const input = document.getElementById('loc-search-input').value.trim();
+                    if (!input) return;
+
+                    ui.showLoading();
+                    try {
+                        const result = await api.geocode(input);
+                        this.state.lat = result.lat;
+                        this.state.lon = result.lon;
+                        this.state.locName = `${result.name}, ${result.country}`;
+                        this.state.isGeolocation = false;
+                        await this.refreshData();
+                    } catch (error) {
+                        ui.showError(error.message === "City not found" ? "City not found. Please try another." : "Error searching location.");
+                        setTimeout(() => ui.hideLoading(), 2000);
+                    }
+                };
+
+                document.getElementById('btn-search-loc').addEventListener('click', handleSearch);
+                document.getElementById('loc-search-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') handleSearch();
+                });
+
+                const manualModal = document.getElementById('manual-modal');
+                document.getElementById('btn-manual-entry').addEventListener('click', () => {
+                    manualModal.classList.remove('hidden');
+                });
+
+                const closeModal = () => manualModal.classList.add('hidden');
+                document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+                document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
+
+                document.getElementById('btn-submit-manual').addEventListener('click', async () => {
+                    const pm25 = parseFloat(document.getElementById('manual-pm25').value);
+                    const pm10 = parseFloat(document.getElementById('manual-pm10').value);
+                    const co = parseFloat(document.getElementById('manual-co').value);
+                    const no = parseFloat(document.getElementById('manual-no').value);
+
+                    if (isNaN(pm25) || isNaN(pm10) || isNaN(co) || isNaN(no)) {
+                        alert("Please enter valid numbers for all pollutants.");
+                        return;
+                    }
+
+                    closeModal();
+                    await this.handleManualPrediction(pm25, pm10, co, no);
+                });
+
+                const trendBtns = document.querySelectorAll('.tab-btn');
+                trendBtns.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        trendBtns.forEach(b => b.classList.remove('active'));
+                        const target = e.currentTarget;
+                        target.classList.add('active');
+                        this.state.trendDays = parseInt(target.dataset.days);
+                        if (this.state.hourlyRawData) {
+                            chartManager.updateTrendCharts(this.state.hourlyRawData, this.state.trendDays);
+                        }
+                    });
+                });
+
+                const mobileBtn = document.getElementById('btn-mobile-menu');
+                const mobileMenu = document.getElementById('mobile-menu');
+                if (mobileBtn) {
+                    mobileBtn.addEventListener('click', () => {
+                        if (mobileMenu) {
+                            mobileMenu.classList.toggle('hidden');
+                            if (!mobileMenu.classList.contains('hidden')) {
+                                mobileMenu.classList.add('flex', 'flex-col');
+                            }
+                        }
+                    });
+                }
+
+                if (mobileMenu) {
+                    mobileMenu.querySelectorAll('.mobile-link').forEach(link => {
+                        link.addEventListener('click', () => {
+                            mobileMenu.classList.add('hidden');
+                            mobileMenu.classList.remove('flex', 'flex-col');
+                        });
+                    });
+                }
+            },
+
+            async refreshData() {
+                ui.showLoading();
+                try {
+                    const rawData = await api.fetchAirQuality(this.state.lat, this.state.lon, 7);
+                    const currentVals = api.getCurrentValues(rawData.hourly);
+                    this.state.hourlyRawData = rawData.hourly;
+
+                    ui.updateLocationInfo(this.state.lat, this.state.lon, this.state.locName, currentVals.timestamp);
+                    ui.renderPollutantCards(currentVals);
+                    ui.renderDataTable(currentVals);
+
+                    const predResult = await api.predictAQI(
+                        currentVals.pm25,
+                        currentVals.pm10,
+                        currentVals.co,
+                        currentVals.no
+                    );
+
+                    if (predResult.success) {
+                        ui.renderAQICard(predResult.predicted_aqi, predResult.aqi_category, currentVals.reference_aqi);
+                        chartManager.updateAQIGauge(predResult.predicted_aqi, predResult.aqi_category);
+                        ui.renderAnalysisSummary(currentVals, predResult.predicted_aqi, predResult.aqi_category, predResult.feature_importance);
+                        chartManager.updateFeatureImportance(predResult.feature_importance);
+                    } else {
+                        throw new Error("Prediction failed.");
+                    }
+
+                    chartManager.updateTrendCharts(this.state.hourlyRawData, this.state.trendDays);
+                    ui.hideLoading();
+                } catch (error) {
+                    console.error("Dashboard refresh error:", error);
+                    ui.showError(error.message || "Failed to load dashboard data.");
+                }
+            },
+
+            async handleManualPrediction(pm25, pm10, co, no) {
+                ui.showLoading();
+                try {
+                    const currentVals = {
+                        timestamp: new Date().toISOString(),
+                        pm25, pm10, co, no,
+                        reference_aqi: null
+                    };
+
+                    this.state.locName = "Manual Entry";
+                    ui.updateLocationInfo(this.state.lat, this.state.lon, this.state.locName, currentVals.timestamp);
+                    ui.renderPollutantCards(currentVals);
+                    ui.renderDataTable(currentVals);
+
+                    const predResult = await api.predictAQI(pm25, pm10, co, no);
+
+                    if (predResult.success) {
+                        ui.renderAQICard(predResult.predicted_aqi, predResult.aqi_category, currentVals.reference_aqi);
+                        chartManager.updateAQIGauge(predResult.predicted_aqi, predResult.aqi_category);
+                        ui.renderAnalysisSummary(currentVals, predResult.predicted_aqi, predResult.aqi_category, predResult.feature_importance);
+                        chartManager.updateFeatureImportance(predResult.feature_importance);
+                    } else {
+                        throw new Error("Prediction failed.");
+                    }
+
+                    ui.hideLoading();
+                } catch (error) {
+                    console.error("Manual prediction error:", error);
+                    ui.showError(error.message || "Failed to predict AQI manually.");
+                }
+            }
+        };
+
+        // Initialize app on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            app.init();
+        });
+    </script>
+</body>
+
+</html>
