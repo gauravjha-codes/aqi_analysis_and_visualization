@@ -2,8 +2,10 @@ const api = {
     // Open-Meteo API config
     omBaseUrl: 'https://air-quality-api.open-meteo.com/v1/air-quality',
     
-    // Backend API config (Python Flask)
-    backendUrl: 'http://localhost:5000/predict',
+    // Backend API config (dynamic for local and Vercel deployment)
+    backendUrl: (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '5000' && window.location.port !== '')
+        ? 'http://localhost:5000/predict'
+        : '/predict',
     
     /**
      * Fetch hourly air quality data from Open-Meteo for a given location.
