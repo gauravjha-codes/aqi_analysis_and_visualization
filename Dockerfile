@@ -20,8 +20,8 @@ RUN R -e "install.packages(c('randomForest', 'jsonlite'), repos='https://cloud.r
 WORKDIR /app
 
 # Copy requirements and install Python dependencies
-COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy the rest of the application files
 COPY . /app
@@ -30,4 +30,4 @@ COPY . /app
 EXPOSE 5000
 
 # Start server using Gunicorn WSGI
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --chdir backend app:app --workers 2 --timeout 120"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} app:app --workers 2 --timeout 120"]
